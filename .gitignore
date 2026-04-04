@@ -1,0 +1,9 @@
+# Working directories (created at runtime, not in repo)
+.cpcache/
+.nrepl-port
+
+# OS
+.DS_Store
+
+# Logs are local
+missions/logs/*.log

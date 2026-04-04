@@ -1,0 +1,44 @@
+{:claude
+ {:check       ["claude" "--version"]
+  :install     "npm install -g @anthropic-ai/claude-code"
+  :description "Claude Code CLI — the operatives"
+  :required    true}
+
+ :gh
+ {:check       ["gh" "auth" "status"]
+  :install     "brew install gh && gh auth login"
+  :description "GitHub CLI — repos, issues, projects, PRs"
+  :required    true}
+
+ :git
+ {:check       ["git" "--version"]
+  :install     "xcode-select --install"
+  :description "Git version control"
+  :required    true}
+
+ :bb
+ {:check       ["bb" "--version"]
+  :install     "brew install borkdude/brew/babashka"
+  :description "Babashka — Section's runtime"
+  :required    true}
+
+ :docker
+ {:check       ["docker" "info"]
+  :install     "brew install --cask docker"
+  :description "Docker — containerize and test solutions"}
+
+ :playwright
+ {:check       ["npx" "playwright" "--version"]
+  :install     "npm install -g playwright && npx playwright install"
+  :description "Playwright — E2E testing and screenshots"}
+
+ :ffmpeg
+ {:check       ["ffmpeg" "-version"]
+  :install     "brew install ffmpeg"
+  :description "FFmpeg — video/GIF for tutorials"}
+
+ :node
+ {:check       ["node" "--version"]
+  :install     "brew install node"
+  :description "Node.js runtime"
+  :required    true}}

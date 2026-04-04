@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.section.birkoff</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/bb</string>
+        <string>run</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kay/Sources/KB/section</string>
+
+    <!-- Run every 5 minutes -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Restart on crash -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Backoff after crash -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Run at boot / load -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Users/kay/section-workspace/logs/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kay/section-workspace/logs/launchd-stderr.log</string>
+
+    <!-- Environment -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/kay/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/kay</string>
+        <key>SECTION_ROOT</key>
+        <string>/Users/kay/Sources/KB/section</string>
+    </dict>
+</dict>
+</plist>
