@@ -5,20 +5,20 @@
  {:requires ([babashka.fs :as fs])
 
   test {:doc  "Run Section sims (tests)"
-        :task (exec 'section.sim-test/-main)}
+        :task ((requiring-resolve 'section.sim-test/-main))}
 
   run {:doc  "Run Birkoff once (poll → dispatch)"
        :override-builtin true
        :task (load-file "birkoff.bb")}
 
   status {:doc  "Show Section status — capabilities, locks, memory"
-          :task (exec 'section.oversight/status-report)}
+          :task ((requiring-resolve 'section.oversight/status-report))}
 
   walter {:doc  "Check all capabilities"
-          :task (exec 'section.walter/report)}
+          :task ((requiring-resolve 'section.walter/report))}
 
   housekeeping {:doc  "Clean stale locks and prune branches"
-                :task (exec 'section.oversight/housekeeping!)}
+                :task ((requiring-resolve 'section.oversight/housekeeping!))}
 
   install {:doc  "Install the launchd plist"
            :task (let [plist (str (System/getProperty "user.home") "/Library/LaunchAgents/com.section.birkoff.plist")]
