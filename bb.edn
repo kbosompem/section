@@ -21,7 +21,11 @@
                 :task (exec 'section.oversight/housekeeping!)}
 
   install {:doc  "Install the launchd plist"
-           :task (shell "cp com.section.birkoff.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.section.birkoff.plist")}
+           :task (let [plist (str (System/getProperty "user.home") "/Library/LaunchAgents/com.section.birkoff.plist")]
+                   (shell "cp" "com.section.birkoff.plist" plist)
+                   (shell "launchctl" "load" plist))}
 
   uninstall {:doc  "Remove the launchd plist"
-             :task (shell "launchctl unload ~/Library/LaunchAgents/com.section.birkoff.plist && rm ~/Library/LaunchAgents/com.section.birkoff.plist")}}}
+             :task (let [plist (str (System/getProperty "user.home") "/Library/LaunchAgents/com.section.birkoff.plist")]
+                     (shell "launchctl" "unload" plist)
+                     (shell "rm" plist))}}}
