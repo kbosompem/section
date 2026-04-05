@@ -21,7 +21,7 @@
   []
   (let [now (System/currentTimeMillis)]
     (doseq [lock (fs/glob (config/locks-dir) "*.lock")]
-      (let [age (- now (fs/last-modified-millis lock))]
+      (let [age (- now (.toMillis (fs/last-modified-time lock)))]
         (when (> age max-lock-age-ms)
           (println (str "Oversight: Cleaning stale lock — " (fs/file-name lock)))
           (fs/delete lock))))))
@@ -114,7 +114,7 @@
   (let [now (System/currentTimeMillis)
         max-age (* 30 24 60 60 1000)]
     (doseq [log (fs/glob (config/logs-dir) "*.log")]
-      (when (> (- now (fs/last-modified-millis log)) max-age)
+      (when (> (- now (.toMillis (fs/last-modified-time log))) max-age)
         (println (str "Oversight: Pruning old log — " (fs/file-name log)))
         (fs/delete log)))))
 
