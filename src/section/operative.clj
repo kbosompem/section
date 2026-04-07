@@ -7,6 +7,7 @@
             [section.briefing :as briefing]
             [section.comm :as comm]
             [section.madeline :as madeline]
+            [section.util :as util]
             [section.voice :as voice]))
 
 ;; ---------------------------------------------------------------------------
@@ -108,25 +109,63 @@
         (not (zero? diff)))))
 
 (defn push-and-pr!
-  "Push the branch and create a PR. Returns the PR URL or nil.
+  "Push the branch and create a PR. Returns a detail map so callers can
+   log and report exactly what failed:
+     {:ok? true  :url ...   :push {...} :pr {...}}
+     {:ok? false :reason \"...\" :push {...} :pr {...}}
    Refuses to push if the operative left us on the wrong branch."
   [repo dir branch number title]
   (assert-on-branch! dir branch)
-  (let [push-result (p/sh ["git" "push" "-u" "origin" branch]
-                          {:dir dir :timeout 60000
-                           :err :string :out :string})]
-    (when (zero? (:exit push-result))
-      (comm/create-pr! repo branch
-        (str "section: " title)
-        (str "Closes #" number "\n\n"
-             "Automated implementation by Section operative.")))))
+  (let [push (p/sh ["git" "push" "-u" "origin" branch]
+                   {:dir dir :timeout 60000
+                    :err :string :out :string})
+        push-detail {:exit (:exit push) :stdout (:out push) :stderr (:err push)}]
+    (if-not (zero? (:exit push))
+      {:ok? false
+       :reason (str "git push failed (exit " (:exit push) ")")
+       :push push-detail
+       :pr nil}
+      (let [pr (comm/create-pr! repo branch
+                 (str "section: " title)
+                 (str "Closes #" number "\n\n"
+                      "Automated implementation by Section operative."))]
+        (if (:ok? pr)
+          {:ok? true :url (:url pr) :push push-detail :pr pr}
+          {:ok? false
+           :reason (str "gh pr create failed (exit " (:exit pr) ")")
+           :push push-detail
+           :pr pr})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Execute a full mission
 ;; ---------------------------------------------------------------------------
 
+(defn- format-phase
+  "Render one phase of a mission's log: a header plus optional exit/stdout/stderr.
+   Empty fields are omitted to keep logs scannable."
+  [name {:keys [exit stdout stderr note]}]
+  (str "=== " name " ===\n"
+       (when exit   (str "Exit: " exit "\n"))
+       (when (and stdout (seq stdout)) (str "--- stdout ---\n" stdout "\n"))
+       (when (and stderr (seq stderr)) (str "--- stderr ---\n" stderr "\n"))
+       (when note   (str note "\n"))))
+
+(defn- write-log!
+  "Write a mission log file with a header and one entry per phase.
+   Each phase is [phase-name phase-data]; phase-data uses the same shape as
+   format-phase. Atomic write so The Perch never reads a half-written log."
+  [repo number title phases]
+  (let [log-file (str (config/logs-dir) "/"
+                      (str/replace repo "/" "_") "_" number ".log")]
+    (util/atomic-spit log-file
+      (str "=== Mission " repo "#" number " — " title " ===\n"
+           "Recorded: " (java.time.Instant/now) "\n\n"
+           (str/join "\n" (for [[n d] phases] (format-phase n d)))))))
+
 (defn execute!
-  "Execute a mission end-to-end. Returns {:status :pr-url :output}."
+  "Execute a mission end-to-end. Returns {:status :pr-url :output}.
+   On any failure, the recorded log captures every phase that ran so The
+   Perch's mission detail page has something actionable to display."
   [repo issue]
   (let [number (:number issue)
         title  (:title issue)]
@@ -143,59 +182,79 @@
 
     (try
       ;; Prepare repo and branch
-      (let [dir     (ensure-repo! repo)
-            branch  (create-branch! dir number)
-            brief   (briefing/assemble repo dir issue)
-            result  (run-claude! dir brief)
-            output  (:out result)
-            log-file (str (config/logs-dir) "/"
-                          (str/replace repo "/" "_") "_" number ".log")]
+      (let [dir    (ensure-repo! repo)
+            branch (create-branch! dir number)
+            brief  (briefing/assemble repo dir issue)
+            result (run-claude! dir brief)
+            output (:out result)
+            claude-phase ["CLAUDE" {:exit (:exit result)
+                                    :stdout output
+                                    :stderr (:err result)}]]
 
-        ;; Save the log
-        (spit log-file (str "=== Mission " repo "#" number " ===\n"
-                            "Exit: " (:exit result) "\n"
-                            "=== STDOUT ===\n" output "\n"
-                            "=== STDERR ===\n" (:err result) "\n"))
-
-        (if (zero? (:exit result))
-          ;; Success — push and PR
-          (if (has-changes? dir branch)
-            (let [pr-url (push-and-pr! repo dir branch number title)]
-              (if pr-url
-                (do
-                  (comm/comment-on-issue! repo number
-                    (str "Mission complete. PR submitted: " pr-url))
-                  (madeline/complete-mission! repo number
-                    {:pr-url pr-url :summary (subs output 0 (min 500 (count output)))})
-                  (voice/speak-event! :mission-done repo number)
-                  {:status :completed :pr-url pr-url :output output})
-                (do
-                  (comm/comment-on-issue! repo number
-                    "Mission complete but failed to create PR. Check logs.")
-                  (madeline/fail-mission! repo number "PR creation failed")
-                  (voice/speak-event! :mission-failed repo number)
-                  {:status :failed :reason "PR creation failed" :output output})))
-            (do
-              (comm/comment-on-issue! repo number
-                "Investigated but found no changes to make. May need human review.")
-              (madeline/complete-mission! repo number
-                {:summary "No changes needed"})
-              (voice/speak-event! :mission-no-changes repo number)
-              {:status :no-changes :output output}))
-
-          ;; Claude exited non-zero
-          (do
+        (cond
+          ;; Claude exited non-zero — log and bail.
+          (not (zero? (:exit result)))
+          (let [reason (str "claude exit " (:exit result))]
+            (write-log! repo number title [claude-phase])
             (comm/comment-on-issue! repo number
               (str "Mission failed (exit " (:exit result) "). "
                    "Check Section logs for details."))
-            (madeline/fail-mission! repo number
-              (str "claude exit " (:exit result)))
+            (madeline/fail-mission! repo number reason)
             (voice/speak-event! :mission-failed repo number)
-            {:status :failed :reason (str "exit " (:exit result)) :output output})))
+            {:status :failed :reason reason :output output})
+
+          ;; Claude succeeded but produced no diff.
+          (not (has-changes? dir branch))
+          (do
+            (write-log! repo number title
+              [claude-phase ["RESULT" {:note "No changes to push."}]])
+            (comm/comment-on-issue! repo number
+              "Investigated but found no changes to make. May need human review.")
+            (madeline/complete-mission! repo number
+              {:summary "No changes needed"})
+            (voice/speak-event! :mission-no-changes repo number)
+            {:status :no-changes :output output})
+
+          ;; Claude succeeded and produced a diff — push and PR.
+          :else
+          (let [pr-result (push-and-pr! repo dir branch number title)
+                push-phase ["GIT PUSH" (:push pr-result)]
+                pr-phase   ["GH PR CREATE"
+                            (let [pr (:pr pr-result)]
+                              (cond
+                                (nil? pr) {:note "Skipped — push failed."}
+                                (:ok? pr) {:exit (:exit pr)
+                                           :stdout (:stdout pr)
+                                           :stderr (:stderr pr)
+                                           :note (str "PR: " (:url pr))}
+                                :else     {:exit (:exit pr)
+                                           :stdout (:stdout pr)
+                                           :stderr (:stderr pr)}))]
+                phases     [claude-phase push-phase pr-phase]]
+            (write-log! repo number title phases)
+            (if (:ok? pr-result)
+              (let [pr-url (:url pr-result)]
+                (comm/comment-on-issue! repo number
+                  (str "Mission complete. PR submitted: " pr-url))
+                (madeline/complete-mission! repo number
+                  {:pr-url pr-url
+                   :summary (subs output 0 (min 500 (count output)))})
+                (voice/speak-event! :mission-done repo number)
+                {:status :completed :pr-url pr-url :output output})
+              (let [reason (:reason pr-result)]
+                (comm/comment-on-issue! repo number
+                  (str "Mission complete but " reason ". Check Section logs."))
+                (madeline/fail-mission! repo number reason)
+                (voice/speak-event! :mission-failed repo number)
+                {:status :failed :reason reason :output output})))))
 
       (catch Exception e
         (let [msg (.getMessage e)]
           (println (str "Operative: Mission " repo "#" number " exception: " msg))
+          (write-log! repo number title
+            [["EXCEPTION" {:note msg
+                           :stderr (with-out-str
+                                     (.printStackTrace e (java.io.PrintWriter. *out*)))}]])
           (comm/comment-on-issue! repo number
             (str "Mission aborted due to error: " msg))
           (madeline/fail-mission! repo number msg)

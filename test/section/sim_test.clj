@@ -11,6 +11,7 @@
             [section.registry :as registry]
             [section.util :as util]
             [section.perch :as perch]
+            [section.comm :as comm]
             [section.voice :as voice]))
 
 ;; ---------------------------------------------------------------------------
@@ -280,6 +281,92 @@
   (let [resp (perch/handler {:request-method :get :uri "/nonexistent"})]
     (is (= 404 (:status resp)) "unknown path returns 404")))
 
+(deftest test-perch-mission-detail-not-found
+  ;; Unknown mission id renders the not-found body with a 404 status.
+  (let [resp (perch/handler {:request-method :get
+                              :uri "/mission/does_not_exist_999"})]
+    (is (= 404 (:status resp)) "unknown mission returns 404")
+    (is (string? (:body resp)) "still returns an HTML body")
+    (is (str/includes? (:body resp) "NOT FOUND") "body labels the not-found state")
+    (is (str/includes? (:body resp) "does_not_exist_999") "body echoes the id")))
+
+(deftest test-perch-mission-detail-known
+  ;; Save a mission, then drilldown should return 200 and include the title.
+  (let [original (madeline/load-memory)]
+    (try
+      (madeline/save-mission! "perchtest/repo" 7
+        {:status :failed
+         :title  "Drilldown sim"
+         :branch "section/issue-7"
+         :reason "git push failed (exit 1)"})
+      (let [resp (perch/handler {:request-method :get
+                                  :uri "/mission/perchtest_repo_7"})]
+        (is (= 200 (:status resp)) "known mission returns 200")
+        (is (str/includes? (:body resp) "Drilldown sim") "body shows the title")
+        (is (str/includes? (:body resp) "git push failed") "body shows the failure reason")
+        (is (str/includes? (:body resp) "RECORD") "body has the record panel")
+        (is (str/includes? (:body resp) "LOG") "body has the log panel"))
+      (finally
+        (madeline/save-memory! original)))))
+
+(deftest test-perch-mission-detail-rejects-bad-id
+  ;; Path traversal / weird ids must not match — they should 404, not crash.
+  (doseq [bad ["../etc/passwd" "abc/def" ""]]
+    (let [resp (perch/handler {:request-method :get
+                                :uri (str "/mission/" bad)})]
+      (is (= 404 (:status resp))
+          (str "bad id '" bad "' should 404")))))
+
+(deftest test-perch-egress-rows-link-to-detail
+  ;; A failed mission's row should be wrapped in a link to /mission/<id>.
+  (let [original (madeline/load-memory)]
+    (try
+      (madeline/save-mission! "linktest/repo" 42
+        {:status :failed :title "Link sim" :reason "boom"})
+      (let [html (perch/render-egress)]
+        (is (str/includes? html "href=\"/mission/linktest_repo_42\"")
+            "egress row links to the mission detail page"))
+      (finally
+        (madeline/save-memory! original)))))
+
+;; ---------------------------------------------------------------------------
+;; Comm — gh auth identity
+;; ---------------------------------------------------------------------------
+
+(deftest test-comm-current-gh-user-shape
+  ;; current-gh-user must return either a non-empty string or nil — never
+  ;; throw, even if gh is missing or unauthenticated.
+  (let [u (comm/current-gh-user)]
+    (is (or (nil? u) (and (string? u) (seq u)))
+        "current-gh-user returns nil or a non-empty string")))
+
+(deftest test-comm-auth-status-shape
+  ;; auth-status must always return a map with these keys, regardless of
+  ;; whether gh is logged in or not. Birkoff and the Perch both rely on it.
+  (let [s (comm/auth-status)]
+    (is (map? s) "auth-status returns a map")
+    (is (contains? s :ok?) "has :ok?")
+    (is (contains? s :expected) "has :expected")
+    (is (contains? s :user) "has :user")
+    (is (boolean? (:ok? s)) ":ok? is a boolean")
+    (is (= (:bot-user config/config) (:expected s))
+        ":expected matches the configured bot user")
+    (when-not (:ok? s)
+      (is (string? (:reason s)) "failure case includes a :reason string"))))
+
+(deftest test-comm-auth-status-detects-mismatch
+  ;; Force a mismatch by binding config/config to a fake bot-user. The
+  ;; current gh user (whatever it is) cannot match a random uuid, so we
+  ;; expect ok? to flip to false and the reason to mention both names.
+  (let [fake "section-test-no-such-user-9f3a"]
+    (with-redefs [config/config (assoc config/config :bot-user fake)]
+      (let [s (comm/auth-status)]
+        (is (= fake (:expected s)) "expected reflects the redef")
+        (is (false? (:ok? s)) "mismatch -> ok? false")
+        (is (string? (:reason s)) "mismatch -> reason populated")
+        (is (str/includes? (:reason s) fake)
+            "reason mentions the expected user")))))
+
 ;; ---------------------------------------------------------------------------
 ;; Voice tests
 ;; ---------------------------------------------------------------------------
@@ -351,6 +438,9 @@
   (test-registry-relationships)
   (test-registry-briefing-context)
   (test-atomic-spit)
+  (test-comm-current-gh-user-shape)
+  (test-comm-auth-status-shape)
+  (test-comm-auth-status-detects-mismatch)
   (test-voice-enabled-returns-boolean)
   (test-voice-say-empty-is-safe)
   (test-voice-speak-event-known-events)
@@ -360,6 +450,10 @@
   (test-perch-graph-data)
   (test-perch-handler-status-endpoints)
   (test-perch-handler-404)
+  (test-perch-mission-detail-not-found)
+  (test-perch-mission-detail-known)
+  (test-perch-mission-detail-rejects-bad-id)
+  (test-perch-egress-rows-link-to-detail)
   (test-project-structure)
 
   (println (str "\n" @passes " passed, " (count @failures) " failed."))

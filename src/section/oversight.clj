@@ -7,7 +7,7 @@
             [section.walter :as walter]
             [section.madeline :as madeline]
             [section.operations :as operations]
-            [section.voice :as voice]))
+            [section.comm :as comm]))
 
 ;; ---------------------------------------------------------------------------
 ;; Stale lock cleanup
@@ -50,15 +50,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn check-auth!
-  "Verify GitHub auth is valid. Returns true if OK."
+  "Verify gh is authenticated AS the configured bot user. Returns true on
+   match, false otherwise. Prints a loud, actionable warning on failure so
+   the launchd stderr log captures exactly what's wrong."
   []
-  (let [r (p/sh ["gh" "auth" "status"]
-                 {:timeout 10000
-                  :err :string
-                  :out :string})]
-    (if (zero? (:exit r))
-      (do (println "Oversight: GitHub auth ✓") true)
-      (do (println "Oversight: WARNING — GitHub auth failed. Run: gh auth login")
+  (let [{:keys [ok? user expected reason]} (comm/auth-status)]
+    (if ok?
+      (do (println (str "Oversight: GitHub auth ✓ (" user ")")) true)
+      (do (println (str "Oversight: WARNING — " reason "."))
+          (println (str "  Fix: gh auth switch --user " expected
+                        "  (or: gh auth login --user " expected ")"))
           false))))
 
 (defn check-api-key!
@@ -94,16 +95,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn recover!
-  "Full startup recovery sequence."
+  "Full startup recovery sequence. Runs every cycle, so it must stay quiet —
+   any voice cue here would fire on every launchd tick. Auth verification
+   has moved to birkoff.bb, where it gates the cycle, so a wrong-account
+   state can't slip through and run missions."
   []
   (println "=== Oversight — Recovery Sequence ===")
   (config/ensure-dirs!)
   (clean-stale-locks!)
   (repair-capabilities!)
-  (check-auth!)
   (check-api-key!)
   (recover-interrupted!)
-  (voice/speak-event! :startup)
   (println "=== Oversight — Recovery Complete ===\n"))
 
 ;; ---------------------------------------------------------------------------

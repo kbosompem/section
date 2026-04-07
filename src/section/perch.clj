@@ -10,7 +10,8 @@
             [section.config :as config]
             [section.walter :as walter]
             [section.madeline :as madeline]
-            [section.registry :as registry]))
+            [section.registry :as registry]
+            [section.comm :as comm]))
 
 ;; ---------------------------------------------------------------------------
 ;; Data gathering
@@ -145,6 +146,8 @@
     line-height: 1.4;
   }
   header .meta b { color: var(--green); }
+  header .meta b.ok  { color: var(--green); }
+  header .meta b.err { color: var(--red); }
   main {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -178,18 +181,45 @@
   .cap .name { flex: 1; }
   .cap .desc { color: var(--text-dim); font-size: 11px; }
   .mission-row {
-    padding: 4px 0;
+    padding: 4px 6px;
     border-bottom: 1px dashed var(--border);
     display: flex;
     justify-content: space-between;
     gap: 8px;
+    text-decoration: none;
+    color: inherit;
   }
   .mission-row:last-child { border-bottom: none; }
+  .mission-row:hover { background: var(--bg-hover); text-decoration: none; }
   .mission-row .id { color: var(--amber); }
   .mission-row .title { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mission-row .status { color: var(--text-dim); font-size: 11px; }
   .mission-row .status.ok  { color: var(--green); }
   .mission-row .status.err { color: var(--red); }
+  .back {
+    color: var(--amber-dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+  }
+  .back:hover { color: var(--amber); border-color: var(--amber-dim); text-decoration: none; }
+  pre.log {
+    background: #050505;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    line-height: 1.45;
+    max-height: 70vh;
+  }
+  .detail-grid .kv { padding: 4px 0; border-bottom: 1px dashed var(--border); }
+  .detail-grid .kv:last-child { border-bottom: none; }
+  .detail-grid .v { text-align: right; max-width: 70%; word-break: break-word; }
   .empty { color: var(--text-dim); font-style: italic; padding: 8px 0; }
   footer {
     display: flex;
@@ -392,6 +422,97 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
 </html>"))
 
 ;; ---------------------------------------------------------------------------
+;; Mission detail — full-page drilldown
+;; ---------------------------------------------------------------------------
+
+(defn read-mission-log
+  "Return the contents of a mission's log file, or nil if absent.
+   The log id matches the mission key (e.g. 'kbosompem_section_2')."
+  [id]
+  (let [f (str (config/logs-dir) "/" id ".log")]
+    (when (fs/exists? f)
+      (try (slurp f) (catch Exception _ nil)))))
+
+(defn get-mission-by-id
+  "Look up a mission by its string id (the keyword name) without re-keywording
+   user input loosely. Returns nil for unknown ids."
+  [id]
+  (when (and id (re-matches #"[A-Za-z0-9_\-]+" id))
+    (get (:missions (madeline/load-memory)) (keyword id))))
+
+(defn- detail-row
+  "Render one key/value row in the mission detail panel. Skips empty values."
+  [k v]
+  (when (and v (seq (str v)))
+    (str "<div class=\"kv\"><span class=\"k\">" (esc k) "</span>"
+         "<span class=\"v\">" (esc v) "</span></div>")))
+
+(defn- pr-link-row
+  "Render the PR row as an actual clickable link, when present."
+  [url]
+  (when (and url (seq (str url)))
+    (str "<div class=\"kv\"><span class=\"k\">Pull request</span>"
+         "<span class=\"v\"><a href=\"" (esc url) "\" target=\"_blank\" rel=\"noopener\">"
+         (esc url) "</a></span></div>")))
+
+(defn render-mission-detail
+  "Full HTML page for one mission. Renders the madeline record plus the
+   per-mission log file. If the id is unknown, renders a 'not found' page —
+   the handler is responsible for the 404 status code."
+  [id]
+  (let [mission (get-mission-by-id id)
+        body    (if (nil? mission)
+                  (str "<main><section class=\"panel full\">"
+                       "<h2>NOT FOUND</h2>"
+                       "<div class=\"empty\">No mission with id <code>"
+                       (esc id) "</code> in Madeline's memory.</div>"
+                       "</section></main>")
+                  (let [log    (or (read-mission-log id) "(no log file recorded)")
+                        status (some-> (:status mission) name)]
+                    (str
+                      "<main>
+  <section class=\"panel full\">
+    <h2>RECORD</h2>
+    <div class=\"content detail-grid\">"
+                      (detail-row "Title"     (:title mission))
+                      (detail-row "Status"    status)
+                      (detail-row "Branch"    (:branch mission))
+                      (detail-row "Attempts"  (:attempts mission))
+                      (detail-row "Reason"    (:reason mission))
+                      (detail-row "Summary"   (:summary mission))
+                      (detail-row "Note"      (:note mission))
+                      (pr-link-row (:pr-url mission))
+                      (detail-row "Updated"   (:updated-at mission))
+                      (detail-row "Completed" (:completed-at mission))
+                      "</div>
+  </section>
+  <section class=\"panel full\">
+    <h2>LOG</h2>
+    <pre class=\"log\">" (esc log) "</pre>
+  </section>
+</main>")))]
+    (str "<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<title>Mission " (esc id) " — The Perch</title>
+<link href=\"https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap\" rel=\"stylesheet\">
+<style>" page-css "</style>
+</head>
+<body>
+<header>
+  <div class=\"title-group\">
+    <a href=\"/\" class=\"back\">← Back</a>
+    <div class=\"title\">MISSION " (esc id) "</div>
+  </div>
+  <div class=\"meta\"></div>
+</header>
+" body "
+</body>
+</html>")))
+
+;; ---------------------------------------------------------------------------
 ;; Partial renderers (returned by /api endpoints for HTMX)
 ;; ---------------------------------------------------------------------------
 
@@ -400,10 +521,17 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
         last-ts (:timestamp hb)
         phase (:phase hb)
         next-ts (when last-ts
-                  (str (.plusSeconds (parse-instant last-ts) 300)))]
+                  (str (.plusSeconds (parse-instant last-ts) 300)))
+        auth (comm/auth-status)
+        auth-cls (if (:ok? auth) "ok" "err")
+        auth-text (if (:ok? auth)
+                    (str (:user auth) " ✓")
+                    (str (or (:user auth) "—")
+                         " ✗ (expect " (:expected auth) ")"))]
     (str "<div>Phase: <b>" (esc (or (some-> phase name) "unknown")) "</b></div>"
          "<div>Last cycle: " (esc (time-ago last-ts)) "</div>"
          "<div>Next cycle: " (esc (time-until next-ts)) "</div>"
+         "<div>gh: <b class=\"" auth-cls "\">" (esc auth-text) "</b></div>"
          "<div style=\"color:#444;font-size:10px;\">" (esc (str (now))) "</div>")))
 
 (defn render-walter []
@@ -437,12 +565,13 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
     (if (empty? active)
       "<div class=\"empty\">Section stands ready. No active missions.</div>"
       (str/join ""
-        (for [[k v] active]
-          (str "<div class=\"mission-row\">"
-               "<span class=\"id\">" (esc (name k)) "</span>"
+        (for [[k v] active
+              :let [id (name k)]]
+          (str "<a class=\"mission-row\" href=\"/mission/" (esc id) "\">"
+               "<span class=\"id\">" (esc id) "</span>"
                "<span class=\"title\">" (esc (or (:title v) "")) "</span>"
                "<span class=\"status warn\">in flight " (esc (time-ago (:updated-at v))) "</span>"
-               "</div>"))))))
+               "</a>"))))))
 
 (defn render-egress []
   (let [missions (:missions (madeline/load-memory))
@@ -460,13 +589,13 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
                        :completed "✓"
                        (:failed :error) "✗"
                        "·")]
-            (str "<div class=\"mission-row\">"
+            (str "<a class=\"mission-row\" href=\"/mission/" (esc (:id m)) "\">"
                  "<span class=\"id\">" mark " " (esc (:id m)) "</span>"
                  "<span class=\"title\">" (esc (or (:title m) "—")) "</span>"
                  "<span class=\"status " css-class "\">"
                  (esc (or (some-> status name) "unknown")) " " (esc (:ago m))
                  "</span>"
-                 "</div>")))))))
+                 "</a>")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Graph JSON for cytoscape
@@ -525,17 +654,31 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
    :body body})
 
 (defn handler [req]
-  (case [(:request-method req) (:uri req)]
-    [:get  "/"]                  (ok (page))
-    [:get  "/api/header"]        (ok (render-header))
-    [:get  "/api/walter"]        (ok (render-walter))
-    [:get  "/api/operations"]    (ok (render-operations))
-    [:get  "/api/abeyance"]      (ok (render-abeyance))
-    [:get  "/api/egress"]        (ok (render-egress))
-    [:get  "/api/graph"]         (ok (json/write-str (graph-data)) "application/json")
-    [:post "/actions/run"]       (do (trigger-run!)          (ok "ok"))
-    [:post "/actions/housekeeping"] (do (trigger-housekeeping!) (ok "ok"))
-    {:status 404 :body "Not found"}))
+  (let [m (:request-method req)
+        u (:uri req)]
+    (cond
+      ;; Mission detail drilldown — id comes from the path.
+      (and (= m :get) (str/starts-with? u "/mission/"))
+      (let [id (subs u (count "/mission/"))]
+        (if (get-mission-by-id id)
+          (ok (render-mission-detail id))
+          {:status 404
+           :headers {"content-type" "text/html; charset=utf-8"
+                     "cache-control" "no-store"}
+           :body (render-mission-detail id)}))
+
+      :else
+      (case [m u]
+        [:get  "/"]                     (ok (page))
+        [:get  "/api/header"]           (ok (render-header))
+        [:get  "/api/walter"]           (ok (render-walter))
+        [:get  "/api/operations"]       (ok (render-operations))
+        [:get  "/api/abeyance"]         (ok (render-abeyance))
+        [:get  "/api/egress"]           (ok (render-egress))
+        [:get  "/api/graph"]            (ok (json/write-str (graph-data)) "application/json")
+        [:post "/actions/run"]          (do (trigger-run!)          (ok "ok"))
+        [:post "/actions/housekeeping"] (do (trigger-housekeeping!) (ok "ok"))
+        {:status 404 :body "Not found"}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Server lifecycle

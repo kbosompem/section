@@ -7,6 +7,45 @@
             [section.registry :as registry]))
 
 ;; ---------------------------------------------------------------------------
+;; gh auth identity — verify Section is talking to the right account
+;; ---------------------------------------------------------------------------
+
+(defn current-gh-user
+  "Return the login of the currently authenticated gh user, or nil if gh is
+   not authenticated / not installed. Pure: no printing, no side effects
+   beyond the subprocess call."
+  []
+  (try
+    (let [r (p/sh ["gh" "api" "user" "--jq" ".login"]
+                  {:timeout 10000 :err :string :out :string})]
+      (when (zero? (:exit r))
+        (let [s (str/trim (:out r))]
+          (when (seq s) s))))
+    (catch Exception _ nil)))
+
+(defn auth-status
+  "Compare the currently-authenticated gh user against the configured
+   :bot-user and return a status map. Never throws.
+     {:ok? true  :expected E :user E}
+     {:ok? false :expected E :user nil       :reason \"...\"}
+     {:ok? false :expected E :user \"other\" :reason \"...\"}"
+  []
+  (let [expected (:bot-user config/config)
+        actual   (current-gh-user)]
+    (cond
+      (nil? actual)
+      {:ok? false :expected expected :user nil
+       :reason (str "gh is not authenticated; expected " expected)}
+
+      (not= actual expected)
+      {:ok? false :expected expected :user actual
+       :reason (str "gh is authenticated as '" actual
+                    "' but Section is configured for '" expected "'")}
+
+      :else
+      {:ok? true :expected expected :user actual})))
+
+;; ---------------------------------------------------------------------------
 ;; GitHub issue polling
 ;; ---------------------------------------------------------------------------
 
@@ -129,7 +168,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn create-pr!
-  "Create a pull request."
+  "Create a pull request. Returns a map describing the result so callers
+   can surface failure detail (gh's stderr) instead of throwing it away.
+   Shape:
+     {:ok? true  :url \"https://...\" :exit 0 :stdout ... :stderr ...}
+     {:ok? false :exit N             :stdout ... :stderr ...}"
   [repo branch title body]
   (let [r (p/sh ["gh" "pr" "create"
                   "--repo" repo
@@ -138,9 +181,13 @@
                   "--body" body]
                  {:timeout 30000
                   :err :string
-                  :out :string})]
-    (when (zero? (:exit r))
-      (str/trim (:out r)))))
+                  :out :string})
+        ok? (zero? (:exit r))]
+    (cond-> {:ok? ok?
+             :exit (:exit r)
+             :stdout (:out r)
+             :stderr (:err r)}
+      ok? (assoc :url (str/trim (:out r))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Email bridge (optional — Gmail IMAP → GitHub issue)

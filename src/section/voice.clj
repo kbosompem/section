@@ -26,16 +26,25 @@
 ;; Core speak function
 ;; ---------------------------------------------------------------------------
 
+(def ^:private speech-queue
+  "Single agent that serializes say invocations so phrases never overlap.
+   Actions on a single agent are guaranteed to run one at a time, in order."
+  (agent nil))
+
 (defn say!
-  "Speak text asynchronously via the macOS say command. Non-blocking.
-   Returns nil immediately; audio plays in the background."
+  "Enqueue text to be spoken via the macOS say command. Non-blocking.
+   Phrases are spoken sequentially in the order they were enqueued, so
+   parallel callers (e.g. concurrent missions) never overlap."
   [text]
   (when (and (seq text) (enabled?))
-    (future
-      (try
-        (p/sh ["say" "-v" voice-name text]
-              {:timeout 30000 :err :string :out :string})
-        (catch Exception _ nil)))))
+    (send-off speech-queue
+      (fn [_]
+        (try
+          (p/sh ["say" "-v" voice-name text]
+                {:timeout 30000 :err :string :out :string})
+          (catch Exception _ nil))
+        nil))
+    nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Named event phrases
