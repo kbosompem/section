@@ -5,6 +5,7 @@
             [section.config :as config]
             [section.walter :as walter]
             [section.madeline :as madeline]
+            [section.registry :as registry]
             [section.comm :as comm]))
 
 (defn read-repo-claude-md
@@ -55,6 +56,9 @@
 
          ;; Repo-level memory
          (madeline/repo-context-text repo)
+
+         ;; Repo relationships from the registry
+         (registry/relationship-context repo)
 
          ;; Standing orders
          "# Standing Orders

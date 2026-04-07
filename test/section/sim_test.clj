@@ -7,7 +7,8 @@
             [section.walter :as walter]
             [section.madeline :as madeline]
             [section.briefing :as briefing]
-            [section.operations :as ops]))
+            [section.operations :as ops]
+            [section.registry :as registry]))
 
 ;; ---------------------------------------------------------------------------
 ;; Minimal test framework
@@ -134,6 +135,98 @@
     (is (not (ops/locked? repo number)) "should be unlocked after unlock!")))
 
 ;; ---------------------------------------------------------------------------
+;; Registry tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-registry-crud
+  ;; Save current registry so we can restore it
+  (let [original (registry/load-registry)]
+    (try
+      ;; Clean slate
+      (registry/save-registry! {})
+
+      ;; Add
+      (registry/add! "test/alpha" {:description "Test repo A" :role "service"})
+      (registry/add! "test/beta"  {:description "Test repo B" :role "frontend"})
+
+      (is (= 2 (count (registry/list-repos))) "should have 2 repos")
+      (is (some #{"test/alpha"} (registry/list-repos)) "alpha in list")
+      (is (some #{"test/beta"}  (registry/list-repos)) "beta in list")
+
+      ;; Read
+      (let [entry (registry/get-repo "test/alpha")]
+        (is (= "test/alpha" (:name entry)) "name roundtrip")
+        (is (= "Test repo A" (:description entry)) "desc roundtrip")
+        (is (= "service" (:role entry)) "role roundtrip"))
+
+      ;; Update via re-add
+      (registry/add! "test/alpha" {:description "Updated A"})
+      (is (= "Updated A" (:description (registry/get-repo "test/alpha")))
+          "update on re-add")
+      (is (= "service" (:role (registry/get-repo "test/alpha")))
+          "other fields preserved on update")
+
+      ;; Remove
+      (registry/remove! "test/beta")
+      (is (nil? (registry/get-repo "test/beta")) "beta removed")
+      (is (= 1 (count (registry/list-repos))) "one left")
+
+      (finally
+        (registry/save-registry! original)))))
+
+(deftest test-registry-relationships
+  (let [original (registry/load-registry)]
+    (try
+      (registry/save-registry! {})
+      (registry/add! "test/app" {:role "frontend"})
+      (registry/add! "test/api" {:role "backend"})
+      (registry/add! "test/db"  {:role "database"})
+
+      ;; Link
+      (registry/link! "test/app" "test/api" :depends-on "REST calls")
+      (registry/link! "test/api" "test/db"  :depends-on "Postgres")
+
+      ;; Check outgoing
+      (let [rels (registry/relationships "test/app")]
+        (is (= 1 (count rels)) "app has 1 relationship")
+        (is (= "test/api" (:to (first rels))) "linked to api")
+        (is (= :depends-on (:type (first rels))) "correct type")
+        (is (= "REST calls" (:note (first rels))) "note preserved"))
+
+      ;; Related (both directions)
+      (let [related (set (registry/related-repos "test/api"))]
+        (is (contains? related "test/app") "api is related to app (incoming)")
+        (is (contains? related "test/db")  "api is related to db (outgoing)"))
+
+      ;; Removing a repo should clean incoming references
+      (registry/remove! "test/db")
+      (is (empty? (registry/relationships "test/api"))
+          "api's relationships should be cleaned when db is removed")
+
+      ;; Explicit unlink
+      (registry/unlink! "test/app" "test/api")
+      (is (empty? (registry/relationships "test/app")) "unlink works")
+
+      (finally
+        (registry/save-registry! original)))))
+
+(deftest test-registry-briefing-context
+  (let [original (registry/load-registry)]
+    (try
+      (registry/save-registry! {})
+      (registry/add! "test/svc" {:description "Main service" :role "api"})
+      (registry/add! "test/lib" {:description "Shared lib"})
+      (registry/link! "test/svc" "test/lib" :depends-on "Uses for auth")
+
+      (let [ctx (registry/relationship-context "test/svc")]
+        (is (string? ctx) "context is a string")
+        (is (str/includes? ctx "test/lib") "mentions related repo")
+        (is (str/includes? ctx "Uses for auth") "includes the note"))
+
+      (finally
+        (registry/save-registry! original)))))
+
+;; ---------------------------------------------------------------------------
 ;; Integration: structure check
 ;; ---------------------------------------------------------------------------
 
@@ -144,7 +237,8 @@
                 "src/section/config.clj" "src/section/operations.clj"
                 "src/section/comm.clj" "src/section/briefing.clj"
                 "src/section/operative.clj" "src/section/walter.clj"
-                "src/section/madeline.clj" "src/section/oversight.clj"]]
+                "src/section/madeline.clj" "src/section/oversight.clj"
+                "src/section/registry.clj"]]
       (is (fs/exists? (str root "/" f))
           (str "Missing file: " f)))))
 
@@ -166,6 +260,9 @@
   (test-madeline-mission-context)
   (test-briefing-assembly)
   (test-lock-lifecycle)
+  (test-registry-crud)
+  (test-registry-relationships)
+  (test-registry-briefing-context)
   (test-project-structure)
 
   (println (str "\n" @passes " passed, " (count @failures) " failed."))

@@ -7,3 +7,6 @@
 
 # Logs are local
 missions/logs/*.log
+
+# Runtime registry (local state, not code)
+madeline/repos.edn

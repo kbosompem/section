@@ -3,7 +3,8 @@
   (:require [babashka.process :as p]
             [babashka.json :as json]
             [clojure.string :as str]
-            [section.config :as config]))
+            [section.config :as config]
+            [section.registry :as registry]))
 
 ;; ---------------------------------------------------------------------------
 ;; GitHub issue polling
@@ -32,13 +33,22 @@
                  "--json" "number,title,body,labels,comments,createdAt")
         [])))
 
+(defn active-repos
+  "Resolve the list of repos to monitor.
+   Prefers the registry; falls back to SECTION_REPOS env var for bootstrap."
+  []
+  (let [registered (registry/monitored-repos)]
+    (if (seq registered)
+      registered
+      (:repos config/config))))
+
 (defn find-all-missions
-  "Find missions across all configured repos."
+  "Find missions across all monitored repos."
   []
   (mapcat (fn [repo]
             (map #(assoc % "repo" repo)
                  (find-missions repo)))
-          (:repos config/config)))
+          (active-repos)))
 
 (defn get-issue-comments
   "Get all comments on an issue."
