@@ -5,7 +5,8 @@
             [babashka.process :as p]
             [clojure.edn :as edn]
             [clojure.string :as str]
-            [section.config :as config]))
+            [section.config :as config]
+            [section.util :as util]))
 
 (def registry-file
   (str (:section-root config/config) "/madeline/repos.edn"))
@@ -27,10 +28,10 @@
     {}))
 
 (defn save-registry!
-  "Persist the registry."
+  "Persist the registry atomically."
   [reg]
   (fs/create-dirs (fs/parent registry-file))
-  (spit registry-file (with-out-str (clojure.pprint/pprint reg))))
+  (util/atomic-spit registry-file (with-out-str (clojure.pprint/pprint reg))))
 
 (defn repo-key
   "Normalize a repo name to a keyword key. 'owner/repo' → :owner_repo"

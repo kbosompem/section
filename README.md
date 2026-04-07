@@ -16,12 +16,15 @@ Named after the covert organization in [*La Femme Nikita*](https://en.wikipedia.
 6. The operative implements the solution, commits, pushes, and opens a PR
 7. **Madeline** records what happened for next time
 
+Meanwhile, **The Perch** runs continuously, serving a web dashboard on `:8080` that shows real-time status: capabilities, active missions, recent egress, and the repo relationship graph.
+
 ## Terminology
 
 | Term | Meaning |
 |------|---------|
 | **Section** | The platform — this repo |
 | **Birkoff** | The orchestrator (nerve center) |
+| **The Perch** | Operations' elevated view — the web dashboard on `:8080` |
 | **Operatives** | Claude Code worker sessions |
 | **Missions** | GitHub issues to be worked on |
 | **Briefing** | The assembled prompt + context for an operative |
@@ -70,7 +73,12 @@ bb test      # Run sims
 bb run       # Execute one cycle
 
 # 6. Install for continuous operation
-bb install   # Installs launchd plist — runs every 5 minutes, restarts on crash
+bb install   # Installs two launchd plists:
+             #   Birkoff — polls every 5 min, restarts on crash
+             #   The Perch — serves the dashboard on :8080, always running
+
+# 7. Open the dashboard
+open http://localhost:8080
 ```
 
 ### Managing Repos
@@ -89,6 +97,43 @@ bb repo help                                  # Full usage
 
 **Relationship types:** `depends-on`, `used-by`, `monitors`, `deploys-to`, `tests-for`, `forks-from`, `parent-of`, `child-of`, `integrates-with`, `sibling-of`.
 
+### The Perch (Web Dashboard)
+
+The Perch is a live, read-only view of everything Section is doing. It runs as a separate `launchd` service and serves an HTML dashboard on port 8080.
+
+![The Perch](docs/perch.png)
+
+What it shows:
+
+- **Header** — current phase, time since last Birkoff cycle, time until next
+- **Walter** — capability checkmarks, updated every 30s
+- **Operations** — in-flight / completed / failed mission counts
+- **Madeline** — interactive repo graph with relationship labels (pan, zoom, drag)
+- **Abeyance** — missions currently being worked on by operatives
+- **Recent Egress** — last 10 missions and their outcomes
+- **Actions** — `RUN NOW` and `HOUSEKEEPING` buttons to trigger cycles manually
+
+**Running it:**
+
+```bash
+bb perch          # Foreground, on :8080
+bb perch 9000     # Custom port
+PERCH_PORT=8888 bb perch
+```
+
+After `bb install`, The Perch runs automatically via launchd.
+
+**Accessing from other devices:**
+
+| Where | URL |
+|---|---|
+| The Mac Mini itself | `http://localhost:8080` |
+| Same LAN | `http://mac-mini.local:8080` (Bonjour) |
+| Remote via Tailscale | `http://mac-mini.<tailnet>.ts.net:8080` |
+| Public via Cloudflare Tunnel | `https://section.yourdomain.com` |
+
+**Recommended for remote access: Tailscale.** Install on the Mac Mini and your phone — access the dashboard from anywhere without port forwarding, DNS, or TLS setup.
+
 ### Creating a Mission
 
 On any registered repo:
@@ -97,6 +142,8 @@ On any registered repo:
 2. Add the label `section`
 3. Assign it to the bot user
 4. Section picks it up on the next cycle, works on it, and opens a PR
+
+You can also click **RUN NOW** on The Perch to skip the 5-minute wait.
 
 ### Configuration
 
@@ -128,35 +175,47 @@ Section monitors itself. To add a feature or fix a bug in Section:
 
 ```bash
 bb run          # Run one cycle (poll → dispatch → housekeeping)
+bb perch [port] # Start The Perch dashboard (defaults to :8080)
 bb test         # Run sims (tests)
-bb status       # The Perch — missions, capabilities, locks
+bb status       # Terminal status report — capabilities, locks, missions
 bb walter       # Capability report
 bb housekeeping # Clean stale locks and old logs
 bb repo ...     # Manage the repo registry (see above)
-bb install      # Install launchd plist for continuous operation
-bb uninstall    # Remove launchd plist
+bb install      # Install both launchd plists (Birkoff + Perch)
+bb uninstall    # Remove both launchd plists
 ```
 
 ## Architecture
 
 ```
-launchd (every 5 min, restarts on crash)
-  └── birkoff.bb
-        ├── oversight/recover!     — self-heal
-        ├── walter/check           — verify capabilities
-        ├── comm/find-all-missions — poll GitHub (via registry)
-        ├── operations/dispatch!   — thread pool
-        │     └── operative/execute!
-        │           ├── briefing/assemble  — build prompt
-        │           │     ├── walter/capability-manifest
-        │           │     ├── madeline/mission-context
-        │           │     └── registry/relationship-context
-        │           ├── claude -p          — do the work
-        │           ├── git push           — egress
-        │           └── gh pr create       — report
-        ├── madeline/save!         — remember
-        └── oversight/housekeeping — clean up
+launchd
+ ├── com.section.birkoff  (every 5 min, restarts on crash)
+ │     └── birkoff.bb
+ │           ├── oversight/recover!     — self-heal
+ │           ├── walter/check           — verify capabilities
+ │           ├── comm/find-all-missions — poll GitHub (via registry)
+ │           ├── operations/dispatch!   — thread pool
+ │           │     └── operative/execute!
+ │           │           ├── briefing/assemble
+ │           │           │     ├── walter/capability-manifest
+ │           │           │     ├── madeline/mission-context
+ │           │           │     └── registry/relationship-context
+ │           │           ├── claude -p          — do the work
+ │           │           ├── git push           — egress
+ │           │           └── gh pr create       — report
+ │           ├── madeline/save!         — remember
+ │           └── oversight/housekeeping — clean up
+ │
+ └── com.section.perch    (always running, restarts on crash)
+       └── perch/-main (httpkit :8080)
+             ├── /                    — HTML dashboard
+             ├── /api/{header,walter,operations,abeyance,egress} — HTMX partials
+             ├── /api/graph           — JSON for cytoscape
+             ├── POST /actions/run    — trigger Birkoff cycle
+             └── POST /actions/housekeeping
 ```
+
+The two services share state through files — Birkoff writes to `madeline/memory.edn`, `madeline/repos.edn`, and `heartbeat.edn`; The Perch reads them. Writes are atomic (write-to-temp + rename) so readers never see partial files.
 
 ## License
 

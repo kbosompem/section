@@ -23,12 +23,27 @@
   repo {:doc  "Manage monitored repos (bb repo help for subcommands)"
         :task ((requiring-resolve 'section.registry/cli) *command-line-args*)}
 
-  install {:doc  "Install the launchd plist"
-           :task (let [plist (str (System/getProperty "user.home") "/Library/LaunchAgents/com.section.birkoff.plist")]
-                   (shell "cp" "com.section.birkoff.plist" plist)
-                   (shell "launchctl" "load" plist))}
+  perch {:doc  "Start The Perch (web dashboard) in foreground"
+         :task ((requiring-resolve 'section.perch/-main) (first *command-line-args*))}
 
-  uninstall {:doc  "Remove the launchd plist"
-             :task (let [plist (str (System/getProperty "user.home") "/Library/LaunchAgents/com.section.birkoff.plist")]
-                     (shell "launchctl" "unload" plist)
-                     (shell "rm" plist))}}}
+  install {:doc  "Install both launchd plists (Birkoff + Perch)"
+           :task (let [home   (System/getProperty "user.home")
+                       la-dir (str home "/Library/LaunchAgents")
+                       bk-dst (str la-dir "/com.section.birkoff.plist")
+                       pc-dst (str la-dir "/com.section.perch.plist")]
+                   (shell "cp" "com.section.birkoff.plist" bk-dst)
+                   (shell "cp" "com.section.perch.plist"   pc-dst)
+                   (shell "launchctl" "load" bk-dst)
+                   (shell "launchctl" "load" pc-dst)
+                   (println "Section installed. Birkoff + Perch online."))}
+
+  uninstall {:doc  "Remove both launchd plists"
+             :task (let [home   (System/getProperty "user.home")
+                         la-dir (str home "/Library/LaunchAgents")
+                         bk-dst (str la-dir "/com.section.birkoff.plist")
+                         pc-dst (str la-dir "/com.section.perch.plist")]
+                     (shell {:continue true} "launchctl" "unload" bk-dst)
+                     (shell {:continue true} "launchctl" "unload" pc-dst)
+                     (shell {:continue true} "rm" bk-dst)
+                     (shell {:continue true} "rm" pc-dst)
+                     (println "Section uninstalled."))}}}

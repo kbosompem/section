@@ -8,7 +8,9 @@
             [section.madeline :as madeline]
             [section.briefing :as briefing]
             [section.operations :as ops]
-            [section.registry :as registry]))
+            [section.registry :as registry]
+            [section.util :as util]
+            [section.perch :as perch]))
 
 ;; ---------------------------------------------------------------------------
 ;; Minimal test framework
@@ -227,6 +229,57 @@
         (registry/save-registry! original)))))
 
 ;; ---------------------------------------------------------------------------
+;; Util tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-atomic-spit
+  (let [f (str (config/workdir) "/atomic-test.txt")]
+    (util/atomic-spit f "hello world")
+    (is (= "hello world" (slurp f)) "atomic-spit roundtrip")
+    (util/atomic-spit f "replacement")
+    (is (= "replacement" (slurp f)) "atomic-spit overwrite")
+    (fs/delete-if-exists f)))
+
+;; ---------------------------------------------------------------------------
+;; Perch tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-perch-time-ago
+  (let [past (str (.minusSeconds (java.time.Instant/now) 120))]
+    (is (str/includes? (perch/time-ago past) "m ago")
+        "2 minutes ago should say 'Nm ago'"))
+  (is (= "—" (perch/time-ago nil)) "nil returns dash"))
+
+(deftest test-perch-renderers-return-strings
+  (is (string? (perch/render-header)) "header renders")
+  (is (string? (perch/render-walter)) "walter renders")
+  (is (string? (perch/render-operations)) "operations renders")
+  (is (string? (perch/render-abeyance)) "abeyance renders")
+  (is (string? (perch/render-egress)) "egress renders")
+  (is (string? (perch/page)) "full page renders")
+  (is (str/includes? (perch/page) "SECTION") "page has title"))
+
+(deftest test-perch-graph-data
+  ;; Uses whatever is in the real registry — should return a valid vector
+  (let [g (perch/graph-data)]
+    (is (vector? g) "graph data is a vector")
+    ;; Every element should have a :data key
+    (doseq [el g]
+      (is (contains? el :data) "element has :data"))))
+
+(deftest test-perch-handler-status-endpoints
+  (let [routes ["/" "/api/header" "/api/walter" "/api/operations"
+                "/api/abeyance" "/api/egress" "/api/graph"]]
+    (doseq [path routes]
+      (let [resp (perch/handler {:request-method :get :uri path})]
+        (is (= 200 (:status resp)) (str path " returns 200"))
+        (is (string? (:body resp)) (str path " has a body"))))))
+
+(deftest test-perch-handler-404
+  (let [resp (perch/handler {:request-method :get :uri "/nonexistent"})]
+    (is (= 404 (:status resp)) "unknown path returns 404")))
+
+;; ---------------------------------------------------------------------------
 ;; Integration: structure check
 ;; ---------------------------------------------------------------------------
 
@@ -238,7 +291,8 @@
                 "src/section/comm.clj" "src/section/briefing.clj"
                 "src/section/operative.clj" "src/section/walter.clj"
                 "src/section/madeline.clj" "src/section/oversight.clj"
-                "src/section/registry.clj"]]
+                "src/section/registry.clj" "src/section/util.clj"
+                "src/section/perch.clj" "com.section.perch.plist"]]
       (is (fs/exists? (str root "/" f))
           (str "Missing file: " f)))))
 
@@ -263,6 +317,12 @@
   (test-registry-crud)
   (test-registry-relationships)
   (test-registry-briefing-context)
+  (test-atomic-spit)
+  (test-perch-time-ago)
+  (test-perch-renderers-return-strings)
+  (test-perch-graph-data)
+  (test-perch-handler-status-endpoints)
+  (test-perch-handler-404)
   (test-project-structure)
 
   (println (str "\n" @passes " passed, " (count @failures) " failed."))

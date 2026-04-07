@@ -15,6 +15,9 @@ Section is organized by role, named after characters from La Femme Nikita (1997)
 - `src/section/walter.clj` — **Walter**: capability registry. Reads `walter/capabilities.edn`.
 - `src/section/madeline.clj` — **Madeline**: memory system. Reads/writes `madeline/memory.edn`.
 - `src/section/oversight.clj` — **Oversight**: self-healing, recovery, housekeeping, status reports.
+- `src/section/registry.clj` — **Registry**: repo list + relationships. CLI dispatcher for `bb repo`.
+- `src/section/util.clj` — Shared utilities. `atomic-spit` is used by anything that persists shared state.
+- `src/section/perch.clj` — **The Perch**: httpkit web dashboard on `:8080`. Read-only view of Madeline's files + two action endpoints. Lives in its own launchd service (`com.section.perch.plist`).
 
 ## Conventions
 
@@ -34,6 +37,7 @@ Section is organized by role, named after characters from La Femme Nikita (1997)
 4. **Never remove the oversight recovery sequence.** It's what brings Section back after failures.
 5. **Backward compatibility**: If you change config keys or memory format, migrate existing data.
 6. **Lock discipline**: Always unlock in a `finally` block. Leaked locks block missions.
+7. **Atomic writes for shared state**: Anything persisted by Madeline, the registry, or Birkoff's heartbeat must use `section.util/atomic-spit` — The Perch reads these files concurrently and cannot tolerate partial writes.
 
 ## Adding a New Capability
 
@@ -53,10 +57,12 @@ Section is organized by role, named after characters from La Femme Nikita (1997)
 
 ```bash
 bb run          # Single execution cycle
+bb perch [port] # Start The Perch web dashboard
 bb test         # Run sims (tests)
-bb status       # Full status report
+bb status       # Terminal status report
 bb walter       # Capability check
+bb repo ...     # Manage the repo registry
 bb housekeeping # Clean locks and old logs
-bb install      # Install launchd plist
-bb uninstall    # Remove launchd plist
+bb install      # Install both launchd plists (Birkoff + Perch)
+bb uninstall    # Remove both launchd plists
 ```

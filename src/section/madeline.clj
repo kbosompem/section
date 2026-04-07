@@ -3,7 +3,8 @@
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
             [clojure.string :as str]
-            [section.config :as config]))
+            [section.config :as config]
+            [section.util :as util]))
 
 (def memory-file
   (str (:section-root config/config) "/madeline/memory.edn"))
@@ -20,9 +21,9 @@
     {:missions {} :knowledge {} :repos {}}))
 
 (defn save-memory!
-  "Persist the full memory store."
+  "Persist the full memory store atomically."
   [mem]
-  (spit memory-file (pr-str mem)))
+  (util/atomic-spit memory-file (pr-str mem)))
 
 (defn update-memory!
   "Apply f to the memory store and persist."
