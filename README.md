@@ -55,23 +55,43 @@ cd ~/Sources/KB/section
 # 2. Store your Anthropic API key in macOS Keychain
 security add-generic-password -a section -s anthropic-api-key -w "YOUR_KEY_HERE"
 
-# 3. Configure repos (comma-separated)
-export SECTION_REPOS="kbosompem/my-app,kbosompem/another-project"
-export SECTION_BOT_USER="kbosompem"
+# 3. Register the repos you want Section to monitor
+bb repo add kbosompem/section --description "The forge itself" --role "orchestrator"
+bb repo add kbosompem/my-app  --description "Main product"     --role "frontend"
+bb repo add kbosompem/api     --description "REST API"         --role "backend"
 
-# 4. Test it
+# 4. Optionally describe how they relate to each other
+bb repo link kbosompem/my-app kbosompem/api --type depends-on --note "Uses /v1 endpoints"
+
+# 5. Test it
 bb walter    # Check capabilities
 bb status    # View Section status
 bb test      # Run sims
 bb run       # Execute one cycle
 
-# 5. Install for continuous operation
+# 6. Install for continuous operation
 bb install   # Installs launchd plist — runs every 5 minutes, restarts on crash
 ```
 
+### Managing Repos
+
+The **repo registry** (managed by Madeline, stored in `madeline/repos.edn`) is how Section knows what to monitor and how repos relate to each other. Relationship context is automatically included in every mission briefing so operatives understand the broader system.
+
+```bash
+bb repo add OWNER/NAME [--description "..."] [--role "..."]
+bb repo list                                  # Show all registered repos
+bb repo show OWNER/NAME                       # Details + relationships (both directions)
+bb repo remove OWNER/NAME                     # Stops monitoring and cleans incoming links
+bb repo link  FROM/REPO TO/REPO [--type TYPE] [--note "..."]
+bb repo unlink FROM/REPO TO/REPO [--type TYPE]
+bb repo help                                  # Full usage
+```
+
+**Relationship types:** `depends-on`, `used-by`, `monitors`, `deploys-to`, `tests-for`, `forks-from`, `parent-of`, `child-of`, `integrates-with`, `sibling-of`.
+
 ### Creating a Mission
 
-On any configured repo:
+On any registered repo:
 
 1. Create an issue describing the work
 2. Add the label `section`
@@ -84,13 +104,15 @@ All config via environment variables (set in the launchd plist or shell):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SECTION_REPOS` | `[]` | Comma-separated list of `owner/repo` to monitor |
+| `SECTION_REPOS` | `[]` | Bootstrap-only fallback. Prefer `bb repo add` instead. |
 | `SECTION_BOT_USER` | `kbosompem` | GitHub user to check issue assignments |
 | `SECTION_LABEL` | `section` | Issue label that triggers a mission |
 | `SECTION_POOL_SIZE` | `4` | Max concurrent operatives |
 | `SECTION_MAX_TURNS` | `25` | Max Claude tool-use turns per mission |
 | `SECTION_TIMEOUT_MS` | `1800000` | Mission timeout (30 min default) |
 | `SECTION_WORKDIR` | `~/section-workspace` | Working directory for clones, logs, locks |
+
+Monitored repos live in the registry (`madeline/repos.edn`), managed with `bb repo` subcommands. The `SECTION_REPOS` env var is only used when the registry is empty, to help with initial bootstrap.
 
 ## Self-Evolution
 
@@ -107,9 +129,10 @@ Section monitors itself. To add a feature or fix a bug in Section:
 ```bash
 bb run          # Run one cycle (poll → dispatch → housekeeping)
 bb test         # Run sims (tests)
-bb status       # Full status report
+bb status       # The Perch — missions, capabilities, locks
 bb walter       # Capability report
 bb housekeeping # Clean stale locks and old logs
+bb repo ...     # Manage the repo registry (see above)
 bb install      # Install launchd plist for continuous operation
 bb uninstall    # Remove launchd plist
 ```
@@ -121,10 +144,13 @@ launchd (every 5 min, restarts on crash)
   └── birkoff.bb
         ├── oversight/recover!     — self-heal
         ├── walter/check           — verify capabilities
-        ├── comm/find-all-missions — poll GitHub
+        ├── comm/find-all-missions — poll GitHub (via registry)
         ├── operations/dispatch!   — thread pool
         │     └── operative/execute!
         │           ├── briefing/assemble  — build prompt
+        │           │     ├── walter/capability-manifest
+        │           │     ├── madeline/mission-context
+        │           │     └── registry/relationship-context
         │           ├── claude -p          — do the work
         │           ├── git push           — egress
         │           └── gh pr create       — report
