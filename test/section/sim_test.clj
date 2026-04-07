@@ -109,10 +109,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-briefing-assembly
-  (let [issue {"number" 42
-               "title" "Test issue"
-               "body" "This is a test"
-               "comments" []}
+  (let [issue {:number 42
+               :title "Test issue"
+               :body "This is a test"
+               :comments []}
         brief (briefing/assemble "test/repo" "/tmp" issue)]
     (is (map? brief) "briefing should be a map")
     (is (string? (:prompt brief)) "should have a prompt")
@@ -292,7 +292,8 @@
                 "src/section/operative.clj" "src/section/walter.clj"
                 "src/section/madeline.clj" "src/section/oversight.clj"
                 "src/section/registry.clj" "src/section/util.clj"
-                "src/section/perch.clj" "com.section.perch.plist"]]
+                "src/section/perch.clj" "com.section.perch.plist"
+                "src/section/mission.clj"]]
       (is (fs/exists? (str root "/" f))
           (str "Missing file: " f)))))
 

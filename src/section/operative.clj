@@ -92,8 +92,8 @@
 (defn execute!
   "Execute a mission end-to-end. Returns {:status :pr-url :output}."
   [repo issue]
-  (let [number (get issue "number")
-        title  (get issue "title")]
+  (let [number (:number issue)
+        title  (:title issue)]
     (println (str "Operative: Starting mission " repo "#" number " — " title))
 
     ;; Mark in-progress in Madeline

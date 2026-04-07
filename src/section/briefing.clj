@@ -17,11 +17,11 @@
 
 (defn issue-context
   "Build context string from the issue body and comments."
-  [repo issue]
-  (let [number   (get issue "number")
-        title    (get issue "title")
-        body     (get issue "body")
-        comments (get issue "comments" [])]
+  [_repo issue]
+  (let [number   (:number issue)
+        title    (:title issue)
+        body     (:body issue)
+        comments (or (:comments issue) [])]
     (str "## GitHub Issue #" number "\n"
          "**Title:** " title "\n\n"
          "**Description:**\n" (or body "(no description)") "\n\n"
@@ -29,15 +29,15 @@
            (str "**Discussion:**\n"
                 (str/join "\n---\n"
                   (map (fn [c]
-                         (str (get c "author" {})
-                              ": " (get c "body" "")))
+                         (str (or (:login (:author c)) "unknown")
+                              ": " (or (:body c) "")))
                        comments))
                 "\n\n")))))
 
 (defn build-system-prompt
   "Build the --append-system-prompt content for a mission."
   [repo repo-dir issue]
-  (let [number (get issue "number")]
+  (let [number (:number issue)]
     (str/join "\n\n"
       (remove str/blank?
         [(str "# Section Operative Briefing\n"
@@ -71,9 +71,9 @@
 (defn build-prompt
   "Build the main -p prompt for a mission."
   [repo issue]
-  (let [number (get issue "number")
-        title  (get issue "title")
-        body   (get issue "body")]
+  (let [number (:number issue)
+        title  (:title issue)
+        body   (:body issue)]
     (str "You are working on GitHub issue #" number " in repo " repo ".\n\n"
          "Title: " title "\n"
          "Description:\n" (or body "(no description)") "\n\n"

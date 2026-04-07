@@ -23,6 +23,9 @@
   repo {:doc  "Manage monitored repos (bb repo help for subcommands)"
         :task ((requiring-resolve 'section.registry/cli) *command-line-args*)}
 
+  mission {:doc  "Manage what Birkoff works on (bb mission help)"
+           :task ((requiring-resolve 'section.mission/cli) *command-line-args*)}
+
   perch {:doc  "Start The Perch (web dashboard) in foreground"
          :task ((requiring-resolve 'section.perch/-main) (first *command-line-args*))}
 

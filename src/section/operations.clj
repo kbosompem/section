@@ -33,7 +33,7 @@
 (defn should-dispatch?
   "Determine if a mission should be dispatched."
   [repo issue]
-  (let [number (get issue "number")
+  (let [number (:number issue)
         mem    (madeline/get-mission repo number)]
     (and
       ;; Not locked (currently in-flight)
@@ -52,7 +52,7 @@
 (defn dispatch-mission!
   "Dispatch a single mission to an operative. Handles locking."
   [repo issue]
-  (let [number (get issue "number")]
+  (let [number (:number issue)]
     (lock! repo number)
     (try
       (operative/execute! repo issue)
@@ -63,7 +63,7 @@
   "Find all pending missions and dispatch them using a thread pool."
   []
   (let [missions  (comm/find-all-missions)
-        pending   (filter #(should-dispatch? (get % "repo") %) missions)
+        pending   (filter #(should-dispatch? (:repo %) %) missions)
         pool-size (:pool-size config/config)
         pool      (Executors/newFixedThreadPool pool-size)]
     (when (seq pending)
@@ -72,7 +72,7 @@
       (let [callables (map (fn [issue]
                              (reify Callable
                                (call [_]
-                                 (dispatch-mission! (get issue "repo") issue))))
+                                 (dispatch-mission! (:repo issue) issue))))
                            pending)
             futures   (.invokeAll pool callables)]
         ;; Collect results

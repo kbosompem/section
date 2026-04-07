@@ -21,16 +21,16 @@
       (json/read-str (:out result)))))
 
 (defn find-missions
-  "Find open issues assigned to the bot user with the section label in a repo."
+  "Find open issues with the section label in a repo.
+   The label is the explicit opt-in — assignee is no longer required.
+   Use `bb mission claim <repo> <number>` to label an issue."
   [repo]
-  (let [bot-user (:bot-user config/config)
-        label    (:label config/config)]
+  (let [label (:label config/config)]
     (or (gh-json "gh" "issue" "list"
                  "--repo" repo
-                 "--assignee" bot-user
                  "--label" label
                  "--state" "open"
-                 "--json" "number,title,body,labels,comments,createdAt")
+                 "--json" "number,title,body,labels,comments,createdAt,assignees")
         [])))
 
 (defn active-repos
@@ -46,7 +46,7 @@
   "Find missions across all monitored repos."
   []
   (mapcat (fn [repo]
-            (map #(assoc % "repo" repo)
+            (map #(assoc % :repo repo)
                  (find-missions repo)))
           (active-repos)))
 

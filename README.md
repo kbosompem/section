@@ -139,11 +139,21 @@ After `bb install`, The Perch runs automatically via launchd.
 On any registered repo:
 
 1. Create an issue describing the work
-2. Add the label `section`
-3. Assign it to the bot user
-4. Section picks it up on the next cycle, works on it, and opens a PR
+2. Add the label `section` (the only opt-in gate — assignee is not required)
+3. Section picks it up on the next cycle, works on it, and opens a PR
 
 You can also click **RUN NOW** on The Perch to skip the 5-minute wait.
+
+### Managing Missions
+
+```bash
+bb mission list                    # Show all claimed missions across registered repos
+bb mission claim <repo> <#>        # Add the section label to an existing issue
+bb mission unclaim <repo> <#>      # Remove the section label
+bb mission help                    # Full usage
+```
+
+`bb mission claim` is the easiest way to retroactively bring an existing GitHub issue into Section's queue. It just adds the `section` label via `gh`.
 
 ### Configuration
 
@@ -181,6 +191,7 @@ bb status       # Terminal status report — capabilities, locks, missions
 bb walter       # Capability report
 bb housekeeping # Clean stale locks and old logs
 bb repo ...     # Manage the repo registry (see above)
+bb mission ...  # Manage missions (see above)
 bb install      # Install both launchd plists (Birkoff + Perch)
 bb uninstall    # Remove both launchd plists
 ```
