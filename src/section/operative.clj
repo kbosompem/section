@@ -35,13 +35,46 @@
       (p/sh ["gh" "repo" "clone" repo dir] {:timeout 120000}))
     dir))
 
+(defn current-branch
+  "Return the currently-checked-out branch name in dir."
+  [dir]
+  (str/trim (:out (p/sh ["git" "branch" "--show-current"]
+                         {:dir dir :err :string :out :string}))))
+
 (defn create-branch!
-  "Create and checkout a mission branch."
+  "Create and checkout a mission branch from current HEAD.
+   Always starts fresh — any stale local branch with the same name is
+   deleted first so we never inherit stale state. Throws if we end up
+   on the wrong branch (defense against silent git failures)."
   [dir number]
   (let [branch (str "section/issue-" number)]
-    (p/sh ["git" "checkout" "-b" branch] {:dir dir :timeout 10000
-                                           :continue true})
+    ;; Nuke any stale local branch with the same name. ensure-repo!
+    ;; has already put us on the default branch, so this is safe.
+    (p/sh ["git" "branch" "-D" branch]
+          {:dir dir :continue true :err :string :out :string})
+    ;; Create fresh from current HEAD (which is the default branch)
+    (let [r (p/sh ["git" "checkout" "-b" branch]
+                   {:dir dir :timeout 10000
+                    :err :string :out :string})]
+      (when-not (zero? (:exit r))
+        (throw (ex-info (str "Failed to create branch " branch ": " (:err r))
+                 {:branch branch :exit (:exit r)}))))
+    ;; Verify we're actually on it. If git ever lies, we want to know loudly.
+    (let [actual (current-branch dir)]
+      (when-not (= actual branch)
+        (throw (ex-info (str "Expected to be on " branch " but on " actual)
+                 {:expected branch :actual actual}))))
     branch))
+
+(defn assert-on-branch!
+  "Throw if dir is not currently on the expected branch.
+   Used as a safety check before pushing."
+  [dir branch]
+  (let [actual (current-branch dir)]
+    (when-not (= actual branch)
+      (throw (ex-info (str "Refusing to push: expected branch " branch
+                            " but currently on " actual)
+               {:expected branch :actual actual})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Run Claude
@@ -75,8 +108,10 @@
         (not (zero? diff)))))
 
 (defn push-and-pr!
-  "Push the branch and create a PR. Returns the PR URL or nil."
+  "Push the branch and create a PR. Returns the PR URL or nil.
+   Refuses to push if the operative left us on the wrong branch."
   [repo dir branch number title]
+  (assert-on-branch! dir branch)
   (let [push-result (p/sh ["git" "push" "-u" "origin" branch]
                           {:dir dir :timeout 60000
                            :err :string :out :string})]

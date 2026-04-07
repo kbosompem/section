@@ -63,7 +63,8 @@
 
          ;; Standing orders
          (str "# Standing Orders
-- The repo is already cloned and you are checked out on branch `" branch "`. **Do not create a new branch.** Commit and push to this branch.
+- The repo is already cloned and you are checked out on branch `" branch "`. **Stay on this branch.** Do not create a new branch. Do not switch branches. Verify with `git branch --show-current` if uncertain.
+- **Never push to `main`, `master`, `trunk`, or any branch other than `" branch "`.** This is a hard rule. Section enforces it locally and will refuse to push from the wrong branch.
 - Section will create the PR for you after you finish. Do **not** run `gh pr create` yourself.
 - **Do not close the GitHub issue.** Section tracks completion via the PR merge.
 - Do not run `gh issue close`, `gh issue edit`, or otherwise modify the issue.
