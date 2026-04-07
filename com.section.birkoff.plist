@@ -49,6 +49,10 @@
         <string>/Users/kay</string>
         <key>SECTION_ROOT</key>
         <string>/Users/kay/Sources/KB/section</string>
+        <key>SECTION_MAX_TURNS</key>
+        <string>100</string>
+        <key>SECTION_TIMEOUT_MS</key>
+        <string>3600000</string>
     </dict>
 </dict>
 </plist>

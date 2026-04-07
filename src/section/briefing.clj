@@ -37,7 +37,8 @@
 (defn build-system-prompt
   "Build the --append-system-prompt content for a mission."
   [repo repo-dir issue]
-  (let [number (:number issue)]
+  (let [number (:number issue)
+        branch (str "section/issue-" number)]
     (str/join "\n\n"
       (remove str/blank?
         [(str "# Section Operative Briefing\n"
@@ -61,12 +62,16 @@
          (registry/relationship-context repo)
 
          ;; Standing orders
-         "# Standing Orders
+         (str "# Standing Orders
+- The repo is already cloned and you are checked out on branch `" branch "`. **Do not create a new branch.** Commit and push to this branch.
+- Section will create the PR for you after you finish. Do **not** run `gh pr create` yourself.
+- **Do not close the GitHub issue.** Section tracks completion via the PR merge.
+- Do not run `gh issue close`, `gh issue edit`, or otherwise modify the issue.
 - If you need a tool that isn't installed, install it via the command shown in the capability list.
-- Write tests when appropriate.
+- Write tests when appropriate, but only run them once you believe the implementation is complete.
 - If the issue asks you to modify Section itself, edit the Babashka source files and run `bb test` before committing.
-- Always commit before finishing. Use a descriptive commit message.
-- If you cannot complete the mission, explain why in your final output."]))))
+- Always commit before finishing. Use a descriptive commit message that references issue #" number ".
+- If you cannot complete the mission, explain why in your final output and exit cleanly without committing partial work.")]))))
 
 (defn build-prompt
   "Build the main -p prompt for a mission."

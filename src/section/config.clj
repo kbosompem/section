@@ -42,8 +42,8 @@
                  [])
    :workdir    (or (System/getenv "SECTION_WORKDIR")
                    (str (System/getProperty "user.home") "/section-workspace"))
-   :max-turns  (parse-long (or (System/getenv "SECTION_MAX_TURNS") "25"))
-   :timeout-ms (parse-long (or (System/getenv "SECTION_TIMEOUT_MS") "1800000")) ;; 30 min
+   :max-turns  (parse-long (or (System/getenv "SECTION_MAX_TURNS") "100"))
+   :timeout-ms (parse-long (or (System/getenv "SECTION_TIMEOUT_MS") "3600000")) ;; 60 min
    :pool-size  (parse-long (or (System/getenv "SECTION_POOL_SIZE") "4"))
    :section-root section-root})
 
