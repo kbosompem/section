@@ -10,7 +10,8 @@
             [section.operations :as ops]
             [section.registry :as registry]
             [section.util :as util]
-            [section.perch :as perch]))
+            [section.perch :as perch]
+            [section.voice :as voice]))
 
 ;; ---------------------------------------------------------------------------
 ;; Minimal test framework
@@ -280,20 +281,51 @@
     (is (= 404 (:status resp)) "unknown path returns 404")))
 
 ;; ---------------------------------------------------------------------------
+;; Voice tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-voice-enabled-returns-boolean
+  (is (boolean? (voice/enabled?)) "enabled? returns a boolean"))
+
+(deftest test-voice-say-empty-is-safe
+  (let [result (voice/say! "")]
+    (is (nil? result) "say! with empty string is a no-op")))
+
+(deftest test-voice-speak-event-known-events
+  ;; All named events should dispatch without throwing
+  (voice/speak-event! :startup)
+  (voice/speak-event! :recovery)
+  (voice/speak-event! :housekeeping)
+  (voice/speak-event! :mission-start "test/repo" 1)
+  (voice/speak-event! :mission-done "test/repo" 1)
+  (voice/speak-event! :mission-failed "test/repo" 1)
+  (voice/speak-event! :mission-no-changes "test/repo" 1))
+
+(deftest test-voice-speak-event-unknown-is-noop
+  (let [result (voice/speak-event! :nonexistent-event)]
+    (is (nil? result) "unknown event is a no-op")))
+
+;; ---------------------------------------------------------------------------
 ;; Integration: structure check
 ;; ---------------------------------------------------------------------------
 
 (deftest test-project-structure
-  (let [root (:section-root config/config)]
+  ;; Detect the repo root via bb.edn, bypassing SECTION_ROOT which may
+  ;; point to a separate production installation.
+  (let [root (loop [dir (fs/cwd)]
+               (cond
+                 (fs/exists? (str dir "/bb.edn")) (str dir)
+                 (nil? (fs/parent dir))            (str (fs/cwd))
+                 :else (recur (fs/parent dir))))]
     (doseq [f ["bb.edn" "birkoff.bb" "CLAUDE.md" "README.md"
-                "walter/capabilities.edn" "madeline/memory.edn"
+                "walter/capabilities.edn"
                 "src/section/config.clj" "src/section/operations.clj"
                 "src/section/comm.clj" "src/section/briefing.clj"
                 "src/section/operative.clj" "src/section/walter.clj"
                 "src/section/madeline.clj" "src/section/oversight.clj"
                 "src/section/registry.clj" "src/section/util.clj"
                 "src/section/perch.clj" "com.section.perch.plist"
-                "src/section/mission.clj"]]
+                "src/section/mission.clj" "src/section/voice.clj"]]
       (is (fs/exists? (str root "/" f))
           (str "Missing file: " f)))))
 
@@ -319,6 +351,10 @@
   (test-registry-relationships)
   (test-registry-briefing-context)
   (test-atomic-spit)
+  (test-voice-enabled-returns-boolean)
+  (test-voice-say-empty-is-safe)
+  (test-voice-speak-event-known-events)
+  (test-voice-speak-event-unknown-is-noop)
   (test-perch-time-ago)
   (test-perch-renderers-return-strings)
   (test-perch-graph-data)

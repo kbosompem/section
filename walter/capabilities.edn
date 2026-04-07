@@ -41,4 +41,9 @@
  {:check       ["node" "--version"]
   :install     "brew install node"
   :description "Node.js runtime"
-  :required    true}}
+  :required    true}
+
+ :say
+ {:check       ["say" ""]
+  :install     "Built-in on macOS. Not available on other platforms."
+  :description "macOS text-to-speech — Birkoff's voice"}}

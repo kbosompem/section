@@ -227,6 +227,17 @@
   }
   a { color: var(--amber); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .avatar {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+  }
+  header { gap: 12px; }
+  header .title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
   @media (max-width: 900px) {
     main { grid-template-columns: 1fr; }
   }
@@ -248,7 +259,32 @@
 </head>
 <body>
 <header>
-  <div class=\"title\">SECTION — THE PERCH</div>
+  <div class=\"title-group\">
+    <svg class=\"avatar\" viewBox=\"0 0 48 48\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" aria-label=\"Birkoff\">
+      <rect width=\"48\" height=\"48\" rx=\"4\" fill=\"#0a0a0a\" stroke=\"#ffb000\" stroke-width=\"1\"/>
+      <!-- Circuit traces -->
+      <line x1=\"4\" y1=\"12\" x2=\"12\" y2=\"12\" stroke=\"#b37c00\" stroke-width=\"0.5\"/>
+      <line x1=\"36\" y1=\"12\" x2=\"44\" y2=\"12\" stroke=\"#b37c00\" stroke-width=\"0.5\"/>
+      <line x1=\"4\" y1=\"36\" x2=\"12\" y2=\"36\" stroke=\"#b37c00\" stroke-width=\"0.5\"/>
+      <line x1=\"36\" y1=\"36\" x2=\"44\" y2=\"36\" stroke=\"#b37c00\" stroke-width=\"0.5\"/>
+      <!-- Head -->
+      <rect x=\"14\" y=\"8\" width=\"20\" height=\"22\" rx=\"3\" fill=\"#1a1a1a\" stroke=\"#ffb000\" stroke-width=\"1\"/>
+      <!-- Eyes -->
+      <rect x=\"17\" y=\"14\" width=\"5\" height=\"3\" rx=\"1\" fill=\"#ffb000\"/>
+      <rect x=\"26\" y=\"14\" width=\"5\" height=\"3\" rx=\"1\" fill=\"#ffb000\"/>
+      <!-- Glasses bridge -->
+      <line x1=\"22\" y1=\"15.5\" x2=\"26\" y2=\"15.5\" stroke=\"#b37c00\" stroke-width=\"0.8\"/>
+      <!-- Mouth / terminal cursor -->
+      <rect x=\"18\" y=\"22\" width=\"8\" height=\"1.5\" rx=\"0.5\" fill=\"#808080\"/>
+      <rect x=\"27\" y=\"22\" width=\"2\" height=\"1.5\" rx=\"0.5\" fill=\"#00ff88\"/>
+      <!-- Shoulders -->
+      <rect x=\"10\" y=\"30\" width=\"28\" height=\"10\" rx=\"2\" fill=\"#1a1a1a\" stroke=\"#ffb000\" stroke-width=\"1\"/>
+      <!-- Collar detail -->
+      <line x1=\"21\" y1=\"30\" x2=\"24\" y2=\"35\" stroke=\"#b37c00\" stroke-width=\"0.8\"/>
+      <line x1=\"27\" y1=\"30\" x2=\"24\" y2=\"35\" stroke=\"#b37c00\" stroke-width=\"0.8\"/>
+    </svg>
+    <div class=\"title\">SECTION — THE PERCH</div>
+  </div>
   <div class=\"meta\" hx-get=\"/api/header\" hx-trigger=\"load, every 10s\" hx-swap=\"innerHTML\">...</div>
 </header>
 

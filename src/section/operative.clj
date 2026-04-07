@@ -6,7 +6,8 @@
             [section.config :as config]
             [section.briefing :as briefing]
             [section.comm :as comm]
-            [section.madeline :as madeline]))
+            [section.madeline :as madeline]
+            [section.voice :as voice]))
 
 ;; ---------------------------------------------------------------------------
 ;; Repo preparation
@@ -95,6 +96,7 @@
   (let [number (:number issue)
         title  (:title issue)]
     (println (str "Operative: Starting mission " repo "#" number " — " title))
+    (voice/speak-event! :mission-start repo number)
 
     ;; Mark in-progress in Madeline
     (madeline/save-mission! repo number
@@ -130,17 +132,20 @@
                     (str "Mission complete. PR submitted: " pr-url))
                   (madeline/complete-mission! repo number
                     {:pr-url pr-url :summary (subs output 0 (min 500 (count output)))})
+                  (voice/speak-event! :mission-done repo number)
                   {:status :completed :pr-url pr-url :output output})
                 (do
                   (comm/comment-on-issue! repo number
                     "Mission complete but failed to create PR. Check logs.")
                   (madeline/fail-mission! repo number "PR creation failed")
+                  (voice/speak-event! :mission-failed repo number)
                   {:status :failed :reason "PR creation failed" :output output})))
             (do
               (comm/comment-on-issue! repo number
                 "Investigated but found no changes to make. May need human review.")
               (madeline/complete-mission! repo number
                 {:summary "No changes needed"})
+              (voice/speak-event! :mission-no-changes repo number)
               {:status :no-changes :output output}))
 
           ;; Claude exited non-zero
@@ -150,6 +155,7 @@
                    "Check Section logs for details."))
             (madeline/fail-mission! repo number
               (str "claude exit " (:exit result)))
+            (voice/speak-event! :mission-failed repo number)
             {:status :failed :reason (str "exit " (:exit result)) :output output})))
 
       (catch Exception e

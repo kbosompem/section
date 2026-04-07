@@ -6,7 +6,8 @@
             [section.config :as config]
             [section.walter :as walter]
             [section.madeline :as madeline]
-            [section.operations :as operations]))
+            [section.operations :as operations]
+            [section.voice :as voice]))
 
 ;; ---------------------------------------------------------------------------
 ;; Stale lock cleanup
@@ -102,6 +103,7 @@
   (check-auth!)
   (check-api-key!)
   (recover-interrupted!)
+  (voice/speak-event! :startup)
   (println "=== Oversight — Recovery Complete ===\n"))
 
 ;; ---------------------------------------------------------------------------
