@@ -2,6 +2,10 @@
 .cpcache/
 .nrepl-port
 
+# Editor / LSP tooling caches
+.clj-kondo/
+.lsp/
+
 # OS
 .DS_Store
 
